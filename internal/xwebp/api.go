@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"log"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,11 +42,29 @@ func (wc *WebPConverter) ConvertToWebP(src multipart.File, filename string) (io.
 		seeker.Seek(0, io.SeekStart)
 	}
 
-	// 解码原始图片
-	img, _, err := image.Decode(src)
+	// 先读取文件开头字节来验证格式
+	buf := make([]byte, 512)
+	n, err := src.Read(buf)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to decode image: %w", err)
+		return nil, "", fmt.Errorf("failed to read file: %w", err)
 	}
+
+	// 重置读取位置
+	if seeker, ok := src.(io.Seeker); ok {
+		seeker.Seek(0, io.SeekStart)
+	}
+
+	// 检查文件魔数（magic number）
+	contentType := http.DetectContentType(buf[:n])
+	log.Printf("Detected content type: %s", contentType)
+
+	// 解码原始图片
+	img, format, err := image.Decode(src)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to decode image (detected: %s): %w", contentType, err)
+	}
+
+	log.Printf("Successfully decoded image format: %s", format)
 
 	// 创建内存缓冲区存储WebP数据
 	pr, pw := io.Pipe()

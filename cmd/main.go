@@ -31,14 +31,12 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 解析查询参数（可选的质量设置）
+	// 解析查询参数
 	quality := getQualityParam(r)
 	lossless := getLosslessParam(r)
-
-	// 创建转换器实例（使用参数或默认值）
 	converter := xwebp.NewWebPConverter(quality, lossless)
 
-	// 解析multipart表单（最大32MB）
+	// 解析multipart表单
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
 		return
@@ -52,6 +50,9 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	// 记录文件信息用于调试
+	log.Printf("Received file: %s, size: %d bytes", header.Filename, header.Size)
+
 	// 验证文件类型
 	if !converter.IsImageSupported(header.Filename) {
 		http.Error(w, "Unsupported image format. Supported: jpg, jpeg, png, bmp, tiff", http.StatusBadRequest)
@@ -62,7 +63,8 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	webpReader, newFilename, err := converter.ConvertToWebP(file, header.Filename)
 	if err != nil {
 		log.Printf("Conversion error: %v", err)
-		http.Error(w, "Conversion failed: "+err.Error(), http.StatusInternalServerError)
+		// 添加更详细的错误信息
+		http.Error(w, "Conversion failed: "+err.Error()+". File: "+header.Filename, http.StatusInternalServerError)
 		return
 	}
 
@@ -76,7 +78,6 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Stream error: %v", err)
 	}
 }
-
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status": "healthy", "service": "webp-converter"}`))
